@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>나만의 만능 단어장</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+        }
+        
+        /* 3D Flip Utilities */
+        .perspective-1000 { perspective: 1000px; }
+        .preserve-3d { transform-style: preserve-3d; }
+        .backface-hidden { backface-visibility: hidden; }
+        .rotate-y-180 { transform: rotateY(180deg); }
+        
+        /* Animations */
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        @keyframes scaleIn {
+            from { transform: scale(0.95); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+        .animate-fade-in { animation: fadeIn 0.2s ease-out forwards; }
+        .animate-scale-in { animation: scaleIn 0.2s ease-out forwards; }
+
+        /* Particles Animation (책/별 파티클) */
+        @keyframes falling {
+            0% { transform: translateY(-10vh) translateX(0) rotate(0deg); opacity: 0; }
+            20% { opacity: 0.6; }
+            80% { opacity: 0.6; }
+            100% { transform: translateY(110vh) translateX(30px) rotate(360deg); opacity: 0; }
+        }
+        .particle {
+            position: fixed;
+            top: -10vh;
+            pointer-events: none;
+            z-index: 0;
+            color: #bae6fd; /* text-sky-200 */
+        }
+        
+        /* 스크롤바 숨기기 */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #bae6fd; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #38bdf8; }
+    </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-sky-50 pb-24 relative overflow-x-hidden">
+
+    <div id="particles"></div>
+
+    <div class="absolute top-[-10%] left-[-10%] w-96 h-96 bg-indigo-200/20 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-sky-200/20 rounded-full blur-3xl pointer-events-none"></div>
+
+    <div class="max-w-2xl mx-auto px-4 pt-10 relative z-10">
+        
+        <header class="text-center mb-10">
+            <div class="inline-flex items-center justify-center p-3 bg-white/60 backdrop-blur-md rounded-2xl shadow-sm border border-indigo-100/50 mb-4">
+                <i class="ph-fill ph-books text-3xl text-indigo-500"></i>
+            </div>
+            <h1 class="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-sky-500 tracking-tight">
+                나만의 만능 단어장
+            </h1>
+            <p id="word-count-text" class="text-indigo-400/80 mt-2 font-medium">데이터 불러오는 중...</p>
+        </header>
+
+        <!-- 검색 영역 -->
+        <div class="flex gap-2 mb-4 animate-fade-in relative z-20">
+            <select id="search-type" onchange="handleSearchTypeChange(event)" class="bg-white/60 backdrop-blur-md px-3 py-2 rounded-xl border border-indigo-100 text-sm font-bold text-indigo-600 outline-none focus:border-indigo-400 transition-all shadow-sm cursor-pointer appearance-none">
+                <option value="word">단어로 검색</option>
+                <option value="meaning">뜻으로 검색 (MAX)</option>
+            </select>
+            <div class="relative flex-1">
+                <input type="text" id="search-input" oninput="handleSearch()" placeholder="검색어를 입력하세요... (예: 광합성)" class="w-full bg-white/60 backdrop-blur-md pl-10 pr-10 py-2 rounded-xl border border-indigo-100 text-sm focus:outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-200 transition-all shadow-sm text-slate-700 placeholder-indigo-300">
+                <i class="ph-bold ph-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-indigo-400"></i>
+                <button onclick="clearSearch()" id="clear-search-btn" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-indigo-300 hover:text-indigo-500 transition-colors">
+                    <i class="ph-fill ph-x-circle text-lg"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- 뷰 모드 탭 -->
+        <div class="flex bg-white/60 backdrop-blur-md p-1 rounded-2xl border border-indigo-100 mb-4 shadow-sm">
+            <button id="btn-list" onclick="setViewMode('list')" class="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all bg-white text-indigo-600 shadow-sm">
+                <i class="ph-bold ph-list-dashes text-lg"></i> 리스트 보기
+            </button>
+            <button id="btn-flashcard" onclick="handleFlashcardClick()" class="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all text-indigo-400 hover:text-indigo-600">
+                <i class="ph-bold ph-cards text-lg"></i> 플래시카드 <i id="lock-icon" class="ph-fill ph-lock text-sm ml-1 text-indigo-300"></i>
+            </button>
+        </div>
+
+        <!-- 중요 표시 탭 -->
+        <div class="flex bg-white/60 backdrop-blur-md p-1 rounded-2xl border border-indigo-100 mb-4 shadow-sm">
+            <button id="btn-filter-all" onclick="setFilterMode('all')" class="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-bold transition-all bg-indigo-100 text-indigo-700 shadow-sm">
+                <i class="ph-bold ph-squares-four text-lg"></i> 모두 보기
+            </button>
+            <button id="btn-filter-starred" onclick="handleStarFilterClick()" class="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-bold transition-all text-indigo-400 hover:text-indigo-600">
+                <i class="ph-fill ph-star text-lg text-amber-400"></i> 중요 표시만 <i id="star-lock-icon" class="ph-fill ph-lock text-sm ml-1 text-indigo-300"></i>
+            </button>
+        </div>
+
+        <!-- 정렬 및 필터 도구 -->
+        <div class="flex flex-wrap justify-between items-center mb-6 px-2 gap-y-3">
+            <div class="flex flex-wrap gap-2 items-center w-full md:w-auto">
+                
+                <div class="relative inline-block w-full md:w-auto">
+                    <select id="sort-select" onchange="handleSortChange(event)" class="w-full md:w-auto text-sm font-bold text-indigo-600 hover:text-indigo-700 transition-all bg-white/60 pl-3 pr-8 py-2 rounded-xl border border-indigo-100 shadow-sm hover:shadow-md appearance-none outline-none cursor-pointer">
+                        <option value="newest">최신순 정렬</option>
+                        <option value="oldest">오래된순 정렬 (MAX)</option>
+                        <option value="word_asc">단어 가나다순 (MAX)</option>
+                        <option value="meaning">뜻 가나다순 (MAX)</option>
+                    </select>
+                    <i class="ph-bold ph-caret-down absolute right-2.5 top-1/2 -translate-y-1/2 text-indigo-400 pointer-events-none"></i>
+                    <i id="sort-lock-icon" class="ph-fill ph-lock text-xs absolute -top-1.5 -right-1.5 text-indigo-400 bg-white rounded-full p-0.5 shadow-sm"></i>
+                    <div id="sort-overlay" onclick="openPremiumModal()" class="absolute inset-0 z-10 cursor-pointer rounded-xl hidden"></div>
+                </div>
+
+                <!-- 학년/수준 필터 -->
+                <div class="relative inline-block w-full md:w-auto">
+                    <select id="grade-filter-select" onchange="handleGradeFilterChange(event)" class="w-full md:w-auto text-sm font-bold text-indigo-600 hover:text-indigo-700 transition-all bg-white/60 pl-3 pr-8 py-2 rounded-xl border border-indigo-100 shadow-sm hover:shadow-md appearance-none outline-none cursor-pointer">
+                        <option value="all">전체 수준</option>
+                        <option value="초등학교 1학년">초등학교 1학년</option>
+                        <option value="초등학교 2학년">초등학교 2학년</option>
+                        <option value="초등학교 3학년">초등학교 3학년</option>
+                        <option value="초등학교 4학년">초등학교 4학년</option>
+                        <option value="초등학교 5학년">초등학교 5학년</option>
+                        <option value="초등학교 6학년">초등학교 6학년</option>
+                        <option value="중학교 1학년">중학교 1학년</option>
+                        <option value="중학교 2학년">중학교 2학년</option>
+                        <option value="중학교 3학년">중학교 3학년</option>
+                        <option value="고등학교 1학년">고등학교 1학년</option>
+                        <option value="고등학교 2학년">고등학교 2학년</option>
+                        <option value="고등학교 3학년">고등학교 3학년</option>
+                        <option value="대학교&전문">대학교&전문</option>
+                    </select>
+                    <i class="ph-bold ph-caret-down absolute right-2.5 top-1/2 -translate-y-1/2 text-indigo-400 pointer-events-none"></i>
+                    <i id="grade-filter-lock" class="ph-fill ph-lock text-xs absolute -top-1.5 -right-1.5 text-indigo-400 bg-white rounded-full p-0.5 shadow-sm"></i>
+                    <div id="grade-filter-overlay" onclick="openPremiumModal()" class="absolute inset-0 z-10 cursor-pointer rounded-xl hidden"></div>
+                </div>
+
+                <!-- 과목 필터 -->
+                <div class="relative inline-block w-full md:w-auto">
+                    <select id="subject-filter-select" onchange="handleSubjectFilterChange(event)" class="w-full md:w-auto text-sm font-bold text-sky-600 hover:text-sky-700 transition-all bg-white/60 pl-3 pr-8 py-2 rounded-xl border border-sky-100 shadow-sm hover:shadow-md appearance-none outline-none cursor-pointer">
+                        <option value="all">전체 과목</option>
+                        <option value="국어">국어</option>
+                        <option value="수학">수학</option>
+                        <option value="사회">사회</option>
+                        <option value="과학">과학</option>
+                        <option value="음악">음악</option>
+                        <option value="미술">미술</option>
+                        <option value="체육">체육</option>
+                        <option value="실과">실과</option>
+                    </select>
+                    <i class="ph-bold ph-caret-down absolute right-2.5 top-1/2 -translate-y-1/2 text-sky-400 pointer-events-none"></i>
+                    <i id="subject-filter-lock" class="ph-fill ph-lock text-xs absolute -top-1.5 -right-1.5 text-sky-400 bg-white rounded-full p-0.5 shadow-sm"></i>
+                    <div id="subject-filter-overlay" onclick="openPremiumModal()" class="absolute inset-0 z-10 cursor-pointer rounded-xl hidden"></div>
+                </div>
+
+            </div>
+
+            <button id="btn-shop-top" onclick="openPremiumModal()" class="w-full md:w-auto justify-center text-sm font-bold text-amber-600 hover:text-amber-700 flex items-center gap-1.5 transition-all bg-gradient-to-r from-amber-100 to-orange-100 px-4 py-2 rounded-xl border border-amber-200 shadow-sm hover:shadow-md">
+                <i class="ph-fill ph-storefront text-lg"></i> 프리미엄 샵
+            </button>
+        </div>
+
+        <!-- 단어 콘텐츠 렌더링 영역 -->
+        <div id="app-content" class="w-full"></div>
+
+    </div>
+
+    <!-- 단어 추가 플로팅 버튼 -->
+    <button onclick="openModal()" class="fixed bottom-8 right-8 w-16 h-16 bg-gradient-to-br from-indigo-500 to-sky-500 text-white rounded-full flex items-center justify-center shadow-lg shadow-indigo-300/50 hover:shadow-indigo-400/50 hover:scale-105 active:scale-95 transition-all z-40 border-2 border-white/20">
+        <i class="ph-bold ph-plus text-2xl"></i>
+    </button>
+
+    <!-- 삭제 확인 모달 -->
+    <div id="delete-confirm-modal" class="hidden fixed inset-0 bg-slate-900/20 backdrop-blur-sm flex items-center justify-center p-4 z-[60] animate-fade-in">
+        <div class="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-sm border border-rose-100 animate-scale-in text-center">
+            <div class="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                <i class="ph-fill ph-trash text-3xl text-rose-500"></i>
+            </div>
+            <h3 class="text-xl font-bold text-slate-800 mb-2">단어 삭제</h3>
+            <p class="text-slate-500 mb-8">이 단어를 정말 삭제하시겠습니까?<br><span class="text-xs text-rose-400">삭제된 데이터는 복구할 수 없습니다.</span></p>
+            
+            <div class="flex gap-3">
+                <button onclick="cancelDelete()" class="flex-1 py-4 bg-slate-100 text-slate-600 font-bold rounded-2xl hover:bg-slate-200 transition-all">취소</button>
+                <button onclick="executeDelete()" class="flex-1 py-4 bg-rose-500 text-white font-bold rounded-2xl shadow-lg shadow-rose-200 hover:bg-rose-600 hover:shadow-xl hover:scale-[1.02] transition-all">삭제하기</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 단어 추가/수정 모달 -->
+    <div id="add-modal" class="hidden fixed inset-0 bg-indigo-900/20 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+        <div class="bg-white rounded-3xl shadow-2xl p-6 w-full max-w-md border border-indigo-100 animate-scale-in">
+            <div class="flex justify-between items-center mb-6">
+                <h3 id="modal-title" class="text-xl font-bold text-indigo-800 flex items-center gap-2">
+                    <i class="ph-fill ph-book-open-text text-indigo-500 text-xl"></i> 새 단어 추가
+                </h3>
+                <button onclick="closeModal()" class="p-2 bg-indigo-50 text-indigo-400 rounded-full hover:bg-indigo-100 transition-colors">
+                    <i class="ph-bold ph-x text-lg"></i>
+                </button>
+            </div>
+            
+            <form id="add-form" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-indigo-700 mb-1">단어 또는 개념</label>
+                    <input type="text" id="input-word" required placeholder="예: 광합성, 피타고라스의 정리" class="w-full px-4 py-3 rounded-2xl bg-indigo-50/50 border border-indigo-200 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200 transition-all text-indigo-900"/>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-indigo-700 mb-1">뜻 또는 설명</label>
+                    <input type="text" id="input-meaning" required placeholder="예: 빛에너지를 이용해 양분을 만드는 과정" class="w-full px-4 py-3 rounded-2xl bg-indigo-50/50 border border-indigo-200 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200 transition-all text-indigo-900"/>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <!-- 학년/수준 선택 -->
+                    <div>
+                        <label class="block text-sm font-medium text-indigo-700 mb-1 flex items-center gap-1">
+                            학년/수준 <i id="grade-select-lock" class="ph-fill ph-lock text-xs text-indigo-400"></i>
+                        </label>
+                        <div class="relative">
+                            <select id="input-grade" class="w-full px-4 py-3 rounded-2xl bg-indigo-50/50 border border-indigo-200 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200 transition-all text-indigo-900 appearance-none cursor-pointer">
+                                <option value="">선택 안함</option>
+                                <option value="초등학교 1학년">초등학교 1학년</option>
+                                <option value="초등학교 2학년">초등학교 2학년</option>
+                                <option value="초등학교 3학년">초등학교 3학년</option>
+                                <option value="초등학교 4학년">초등학교 4학년</option>
+                                <option value="초등학교 5학년">초등학교 5학년</option>
+                                <option value="초등학교 6학년">초등학교 6학년</option>
+                                <option value="중학교 1학년">중학교 1학년</option>
+                                <option value="중학교 2학년">중학교 2학년</option>
+                                <option value="중학교 3학년">중학교 3학년</option>
+                                <option value="고등학교 1학년">고등학교 1학년</option>
+                                <option value="고등학교 2학년">고등학교 2학년</option>
+                                <option value="고등학교 3학년">고등학교 3학년</option>
+                                <option value="대학교&전문">대학교&전문 수준</option>
+                            </select>
+                            <i class="ph-bold ph-caret-down absolute right-3 top-1/2 -translate-y-1/2 text-indigo-400 pointer-events-none"></i>
+                            <div id="grade-select-overlay" onclick="openPremiumModal()" class="absolute inset-0 z-10 cursor-pointer rounded-2xl"></div>
+                        </div>
+                    </div>
+
+                    <!-- 과목 선택 -->
+                    <div>
+                        <label class="block text-sm font-medium text-indigo-700 mb-1 flex items-center gap-1">
+                            과목 <i id="subject-select-lock" class="ph-fill ph-lock text-xs text-indigo-400"></i>
+                        </label>
+                        <div class="relative">
+                            <select id="input-subject" class="w-full px-4 py-3 rounded-2xl bg-indigo-50/50 border border-indigo-200 focus:outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200 transition-all text-indigo-900 appearance-none cursor-pointer">
+                                <option value="">선택 안함</option>
+                                <option value="국어">국어</option>
+                                <option value="수학">수학</option>
+                                <option value="사회">사회</option>
+                                <option value="과학">과학</option>
+                                <option value="음악">음악</option>
+                                <option value="미술">미술</option>
+                                <option value="체육">체육</option>
+                                <option value="실과">실과</option>
+                            </select>
+                            <i class="ph-bold ph-caret-down absolute right-3 top-1/2 -translate-y-1/2 text-indigo-400 pointer-events-none"></i>
+                            <div id="subject-select-overlay" onclick="openPremiumModal()" class="absolute inset-0 z-10 cursor-pointer rounded-2xl"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <button type="submit" id="btn-submit-modal" class="w-full mt-6 bg-gradient-to-r from-indigo-500 to-sky-500 text-white py-4 rounded-2xl font-bold shadow-lg shadow-indigo-200 hover:shadow-indigo-300 hover:scale-[1.02] transition-all">
+                    추가하기
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- 프리미엄 샵 모달 -->
+    <div id="premium-modal" class="hidden fixed inset-0 bg-slate-50 z-50 overflow-y-auto animate-fade-in">
+        <div class="min-h-screen px-4 py-8 flex flex-col items-center justify-center relative">
+            <button onclick="closePremiumModal()" class="absolute top-4 right-4 md:top-8 md:right-8 p-3 bg-white text-slate-500 rounded-full hover:bg-slate-100 shadow-sm transition-colors border border-slate-200 z-10">
+                <i class="ph-bold ph-x text-xl"></i>
+            </button>
+
+            <div class="max-w-6xl w-full mx-auto grid lg:grid-cols-3 md:grid-cols-2 gap-6 lg:gap-8 items-center pt-12 md:pt-0">
+                
+                <div class="text-center md:text-left space-y-6 md:col-span-2 lg:col-span-1">
+                    <div class="inline-flex items-center justify-center p-4 bg-gradient-to-br from-amber-300 to-orange-400 rounded-3xl shadow-xl shadow-amber-200/50 mb-2">
+                        <i class="ph-fill ph-crown text-5xl text-white"></i>
+                    </div>
+                    <h2 class="text-4xl md:text-5xl font-extrabold text-slate-800 tracking-tight leading-tight">
+                        학습의 한계를 <br class="hidden md:block">
+                        없애는 <span class="text-transparent bg-clip-text bg-gradient-to-r from-amber-500 to-orange-500">업그레이드</span>
+                    </h2>
+                    <p class="text-lg text-slate-500 leading-relaxed">
+                        자신의 학습량에 맞게 단어장을 확장해 보세요. 합리적인 PRO 요금제와 한계가 없는 MAX 요금제가 준비되어 있습니다.
+                    </p>
+                </div>
+
+                <!-- PRO 등급 -->
+                <div class="bg-white rounded-[2rem] shadow-xl border border-slate-100 p-8 relative overflow-hidden animate-scale-in flex flex-col h-full justify-between mt-4 md:mt-0">
+                    <div>
+                        <div class="mb-6">
+                            <div class="inline-block px-3 py-1 bg-slate-100 text-slate-600 text-xs font-bold rounded-full mb-3">일반 학습자용</div>
+                            <h3 class="text-2xl font-bold text-slate-800 mb-2">PRO 등급</h3>
+                            <div class="flex items-baseline gap-2">
+                                <span class="text-4xl font-extrabold text-slate-900">₩ 5,900</span>
+                            </div>
+                        </div>
+                        <div class="space-y-4 mb-8">
+                            <div class="flex items-center gap-3 text-slate-700">
+                                <div class="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                                    <i class="ph-bold ph-check text-emerald-600 text-sm"></i>
+                                </div>
+                                <span class="font-medium">단어 추가 개수 300개로 확장</span>
+                            </div>
+                            <div class="flex items-center gap-3 text-slate-700">
+                                <div class="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                                    <i class="ph-bold ph-check text-emerald-600 text-sm"></i>
+                                </div>
+                                <span class="font-medium">플래시카드(암기장) 모드 활성화</span>
+                            </div>
+                            <div class="flex items-center gap-3 text-slate-700">
+                                <div class="w-6 h-6 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                                    <i class="ph-bold ph-check text-emerald-600 text-sm"></i>
+                                </div>
+                                <span class="font-medium">단어 추가 시 학년 및 과목 지정 가능</span>
+                            </div>
+                        </div>
+                    </div>
+                    <button id="btn-pro-purchase" onclick="purchaseTier('pro')" class="w-full bg-slate-800 text-white py-4 rounded-2xl font-bold text-lg shadow-md hover:bg-slate-900 hover:scale-[1.02] transition-all mt-6">
+                        PRO 결제하기
+                    </button>
+                </div>
+
+                <!-- MAX 등급 -->
+                <div class="bg-gradient-to-b from-amber-50 to-orange-50 rounded-[2rem] shadow-2xl border-2 border-amber-400 p-8 relative overflow-hidden animate-scale-in flex flex-col h-full justify-between transform lg:scale-105 z-10 md:col-span-2 lg:col-span-1">
+                    <div class="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-amber-400 to-orange-500"></div>
+                    <div>
+                        <div class="mb-6">
+                            <div class="inline-block px-3 py-1 bg-gradient-to-r from-amber-400 to-orange-500 text-white text-xs font-bold rounded-full mb-3 shadow-md">최고의 선택</div>
+                            <h3 class="text-2xl font-bold text-slate-800 mb-2 flex items-center gap-2">MAX 등급 <i class="ph-fill ph-sparkle text-amber-500"></i></h3>
+                            <div class="flex items-baseline gap-2">
+                                <span class="text-4xl font-extrabold text-slate-900">₩ 10,000</span>
+                            </div>
+                        </div>
+                        <div class="space-y-4 mb-8">
+                            <div class="flex items-center gap-3 text-slate-700">
+                                <div class="w-6 h-6 rounded-full bg-amber-200 flex items-center justify-center flex-shrink-0">
+                                    <i class="ph-bold ph-check text-amber-700 text-sm"></i>
+                                </div>
+                                <span class="font-bold">단어 추가 무제한 (제한 없음)</span>
+                            </div>
+                            <div class="flex items-center gap-3 text-slate-700">
+                                <div class="w-6 h-6 rounded-full bg-amber-200 flex items-center justify-center flex-shrink-0">
+                                    <i class="ph-bold ph-check text-amber-700 text-sm"></i>
+                                </div>
+                                <span class="font-bold">중요 표시(별표) 전용 탭 활성화</span>
+                            </div>
+                            <div class="flex items-center gap-3 text-slate-700">
+                                <div class="w-6 h-6 rounded-full bg-amber-200 flex items-center justify-center flex-shrink-0">
+                                    <i class="ph-bold ph-check text-amber-700 text-sm"></i>
+                                </div>
+                                <span class="font-bold">고급 정렬 및 상세 검색</span>
+                            </div>
+                            <div class="flex items-center gap-3 text-slate-700">
+                                <div class="w-6 h-6 rounded-full bg-amber-200 flex items-center justify-center flex-shrink-0">
+                                    <i class="ph-bold ph-check text-amber-700 text-sm"></i>
+                                </div>
+                                <span class="font-bold">PRO의 모든 혜택 포함</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="space-y-3 mt-6">
+                        <button onclick="document.getElementById('fake-pay-msg').classList.remove('hidden')" class="w-full bg-gradient-to-r from-amber-400 to-orange-500 text-white py-4 rounded-2xl font-bold text-lg shadow-lg shadow-amber-200/50 hover:scale-[1.02] hover:shadow-xl transition-all">
+                            MAX 결제하기
+                        </button>
+                        <p id="fake-pay-msg" class="hidden text-center text-rose-500 text-xs font-bold animate-fade-in bg-rose-50 p-2 rounded-lg">
+                            결제 시스템 연결 중...
+                        </p>
+                        <button onclick="purchaseTier('max')" class="w-full bg-slate-800 text-white py-3 rounded-2xl text-sm font-bold shadow-md hover:bg-slate-900 transition-all flex items-center justify-center gap-2">
+                            <i class="ph-bold ph-code text-lg text-amber-400"></i> 개발자 MAX 무료 패스
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- 요금제 초기화 버튼 추가 -->
+                <div class="md:col-span-2 lg:col-span-3 text-center mt-4">
+                    <button onclick="resetTier()" class="text-slate-400 hover:text-slate-600 text-sm font-medium underline underline-offset-4 transition-colors">
+                        현재 요금제 초기화 (Free로 돌아가기)
+                    </button>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 초기 데이터 (과목 데이터 추가됨)
+        const initialWords = [
+            { id: '1', word: '광합성', meaning: '식물이 빛에너지를 이용하여 양분을 만드는 과정', isStarred: false, grade: '초등학교 6학년', subject: '과학' },
+            { id: '2', word: '방정식', meaning: '미지수 x의 값에 따라 참이 되기도 하고 거짓이 되기도 하는 등식', isStarred: true, grade: '중학교 1학년', subject: '수학' },
+            { id: '3', word: '훈민정음', meaning: '백성을 가르치는 바른 소리라는 뜻으로, 조선 세종이 창제한 문자', isStarred: false, grade: '초등학교 5학년', subject: '국어' },
+            { id: '4', word: '수요와 공급', meaning: '시장에서 재화나 서비스의 가격과 거래량을 결정하는 기본 원리', isStarred: false, grade: '중학교 3학년', subject: '사회' },
+            { id: '5', word: '모노포니(Monophony)', meaning: '반주 없이 하나의 선율로만 이루어진 음악 형태', isStarred: true, grade: '중학교 2학년', subject: '음악' },
+        ];
+
+        // 상태 관리 변수
+        let words = [];
+        let viewMode = 'list'; 
+        let filterMode = 'all'; 
+        let gradeFilterMode = 'all'; 
+        let subjectFilterMode = 'all'; // 새롭게 추가된 과목 필터 상태
+        let searchQuery = '';
+        let searchType = 'word'; 
+        let currentCardIndex = 0;
+        let editingId = null; 
+        let wordToDeleteId = null; 
+        
+        let userTier = localStorage.getItem('study-tier') || 'free';
+        if (localStorage.getItem('study-premium') === 'true' && userTier === 'free') {
+            userTier = 'pro';
+            localStorage.setItem('study-tier', 'pro');
+        }
+
+        // DOM 캐싱
+        const appContent = document.getElementById('app-content');
+        const wordCountText = document.getElementById('word-count-text');
+        const modal = document.getElementById('add-modal');
+        const modalTitle = document.getElementById('modal-title');
+        const btnSubmitModal = document.getElementById('btn-submit-modal');
+        const premiumModal = document.getElementById('premium-modal');
+        const addForm = document.getElementById('add-form');
+        const btnList = document.getElementById('btn-list');
+        const btnFlashcard = document.getElementById('btn-flashcard');
+        const btnFilterAll = document.getElementById('btn-filter-all');
+        const btnFilterStarred = document.getElementById('btn-filter-starred');
+        const gradeFilterSelect = document.getElementById('grade-filter-select');
+        const subjectFilterSelect = document.getElementById('subject-filter-select');
+        const deleteConfirmModal = document.getElementById('delete-confirm-modal');
+        const searchInput = document.getElementById('search-input');
+        const searchTypeSelect = document.getElementById('search-type');
+        const sortSelect = document.getElementById('sort-select');
+        const btnProPurchase = document.getElementById('btn-pro-purchase');
+
+        // Locks & Overlays
+        const lockIcon = document.getElementById('lock-icon');
+        const sortLockIcon = document.getElementById('sort-lock-icon');
+        const starLockIcon = document.getElementById('star-lock-icon');
+        
+        const gradeSelectLock = document.getElementById('grade-select-lock');
+        const gradeFilterLock = document.getElementById('grade-filter-lock');
+        const gradeSelectOverlay = document.getElementById('grade-select-overlay');
+        const gradeFilterOverlay = document.getElementById('grade-filter-overlay');
+        
+        const subjectSelectLock = document.getElementById('subject-select-lock');
+        const subjectFilterLock = document.getElementById('subject-filter-lock');
+        const subjectSelectOverlay = document.getElementById('subject-select-overlay');
+        const subjectFilterOverlay = document.getElementById('subject-filter-overlay');
+        
+        const sortOverlay = document.getElementById('sort-overlay');
+
+        // 앱 초기화
+        function initApp() {
+            createParticles();
+            const saved = localStorage.getItem('study-words');
+            if (saved) {
+                try {
+                    words = JSON.parse(saved);
+                } catch (e) {
+                    words = [...initialWords];
+                }
+            } else {
+                words = [...initialWords];
+            }
+
+            // 저장된 정렬 상태 복구
+            const savedSort = localStorage.getItem('study-sort');
+            if (savedSort && sortSelect) {
+                sortSelect.value = savedSort;
+            }
+
+            updateUIState();
+            applyCurrentSort(); 
+            render();
+        }
+
+        // UI 상태 업데이트
+        function updateUIState() {
+            const btnShopTop = document.getElementById('btn-shop-top');
+            
+            if (userTier === 'max') {
+                wordCountText.innerHTML = `단어 ${words.length}개 기억 중 <span class="text-amber-500 font-bold ml-1">💎 MAX</span>`;
+                
+                // 각종 Lock 숨기기
+                if(lockIcon) lockIcon.style.display = 'none';
+                if(starLockIcon) starLockIcon.style.display = 'none';
+                if(sortLockIcon) sortLockIcon.style.display = 'none';
+                
+                if(gradeFilterLock) gradeFilterLock.style.display = 'none';
+                if(gradeFilterOverlay) gradeFilterOverlay.style.display = 'none';
+                if(gradeSelectLock) gradeSelectLock.style.display = 'none';
+                if(gradeSelectOverlay) gradeSelectOverlay.style.display = 'none';
+                
+                if(subjectFilterLock) subjectFilterLock.style.display = 'none';
+                if(subjectFilterOverlay) subjectFilterOverlay.style.display = 'none';
+                if(subjectSelectLock) subjectSelectLock.style.display = 'none';
+                if(subjectSelectOverlay) subjectSelectOverlay.style.display = 'none';
+                
+                if(sortOverlay) sortOverlay.style.display = 'none';
+                
+                if(btnShopTop) {
+                    btnShopTop.style.display = 'flex';
+                    btnShopTop.innerHTML = '<i class="ph-fill ph-storefront text-lg"></i> 스토어 (MAX)';
+                }
+
+                // MAX 구매 시 PRO 구매 버튼 비활성화
+                if(btnProPurchase) {
+                    btnProPurchase.disabled = true;
+                    btnProPurchase.innerText = 'MAX 혜택 적용 중';
+                    btnProPurchase.className = 'w-full bg-slate-200 text-slate-500 py-4 rounded-2xl font-bold text-lg cursor-not-allowed mt-6';
+                }
+
+            } else if (userTier === 'pro') {
+                wordCountText.innerHTML = `단어 ${words.length} / 300개 기억 중 <span class="text-sky-500 font-bold ml-1">👑 PRO</span>`;
+                
+                if(lockIcon) lockIcon.style.display = 'none'; 
+                if(starLockIcon) starLockIcon.style.display = 'inline-block';
+                if(sortLockIcon) sortLockIcon.style.display = 'inline-block';
+                
+                if(gradeFilterLock) gradeFilterLock.style.display = 'none'; // PRO는 학년 필터 사용 가능
+                if(gradeFilterOverlay) gradeFilterOverlay.style.display = 'none';
+                if(gradeSelectLock) gradeSelectLock.style.display = 'none';
+                if(gradeSelectOverlay) gradeSelectOverlay.style.display = 'none';
+
+                if(subjectFilterLock) subjectFilterLock.style.display = 'none'; // PRO는 과목 필터 사용 가능
+                if(subjectFilterOverlay) subjectFilterOverlay.style.display = 'none';
+                if(subjectSelectLock) subjectSelectLock.style.display = 'none';
+                if(subjectSelectOverlay) subjectSelectOverlay.style.display = 'none';
+                
+                if(sortOverlay) sortOverlay.style.display = 'block';
+                
+                if(btnShopTop) {
+                    btnShopTop.style.display = 'flex';
+                    btnShopTop.innerHTML = '<i class="ph-bold ph-arrow-circle-up text-lg"></i> MAX 업그레이드';
+                }
+
+                // PRO 사용 중이므로 PRO 버튼 상태 변경
+                if(btnProPurchase) {
+                    btnProPurchase.disabled = true;
+                    btnProPurchase.innerText = 'PRO 등급 사용 중';
+                    btnProPurchase.className = 'w-full bg-slate-200 text-slate-500 py-4 rounded-2xl font-bold text-lg cursor-not-allowed mt-6';
+                }
+
+            } else {
+                // Free Tier
+                wordCountText.innerText = `단어 ${words.length} / 50개 기억 중`;
+                
+                if(lockIcon) lockIcon.style.display = 'inline-block';
+                if(starLockIcon) starLockIcon.style.display = 'inline-block';
+                if(sortLockIcon) sortLockIcon.style.display = 'inline-block';
+                
+                if(gradeFilterLock) gradeFilterLock.style.display = 'inline-block';
+                if(gradeFilterOverlay) gradeFilterOverlay.style.display = 'block';
+                if(gradeSelectLock) gradeSelectLock.style.display = 'inline-block';
+                if(gradeSelectOverlay) gradeSelectOverlay.style.display = 'block';
+
+                if(subjectFilterLock) subjectFilterLock.style.display = 'inline-block';
+                if(subjectFilterOverlay) subjectFilterOverlay.style.display = 'block';
+                if(subjectSelectLock) subjectSelectLock.style.display = 'inline-block';
+                if(subjectSelectOverlay) subjectSelectOverlay.style.display = 'block';
+                
+                if(sortOverlay) sortOverlay.style.display = 'block';
+                
+                if(btnShopTop) {
+                    btnShopTop.style.display = 'flex';
+                    btnShopTop.innerHTML = '<i class="ph-fill ph-storefront text-lg"></i> 프리미엄 샵';
+                }
+
+                // Free 티어일때는 PRO 결제 활성화
+                if(btnProPurchase) {
+                    btnProPurchase.disabled = false;
+                    btnProPurchase.innerText = 'PRO 결제하기';
+                    btnProPurchase.className = 'w-full bg-slate-800 text-white py-4 rounded-2xl font-bold text-lg shadow-md hover:bg-slate-900 hover:scale-[1.02] transition-all mt-6';
+                }
+            }
+        }
+
+        function saveData() {
+            localStorage.setItem('study-words', JSON.stringify(words));
+            updateUIState();
+        }
+
+        // 검색 처리
+        function handleSearchTypeChange(e) {
+            if (e.target.value === 'meaning' && userTier !== 'max') {
+                e.preventDefault();
+                e.target.value = 'word'; 
+                searchType = 'word';
+                openPremiumModal();
+                return;
+            }
+            handleSearch();
+        }
+
+        function handleSearch() {
+            searchQuery = searchInput.value.trim().toLowerCase();
+            searchType = searchTypeSelect.value;
+            
+            const clearBtn = document.getElementById('clear-search-btn');
+            if (searchQuery.length > 0) {
+                clearBtn.classList.remove('hidden');
+            } else {
+                clearBtn.classList.add('hidden');
+            }
+            
+            currentCardIndex = 0;
+            render();
+        }
+
+        function clearSearch() {
+            searchInput.value = '';
+            handleSearch();
+        }
+
+        // 중요 표시 필터
+        function handleStarFilterClick() {
+            if (userTier !== 'max') {
+                openPremiumModal();
+                return;
+            }
+            setFilterMode('starred');
+        }
+
+        // 학년 수준 필터
+        function handleGradeFilterChange(e) {
+            gradeFilterMode = e.target.value;
+            currentCardIndex = 0;
+            render();
+        }
+
+        // 과목 필터
+        function handleSubjectFilterChange(e) {
+            subjectFilterMode = e.target.value;
+            currentCardIndex = 0;
+            render();
+        }
+
+        // 뷰 모드
+        function handleFlashcardClick() {
+            if (userTier === 'free') {
+                openPremiumModal();
+                return;
+            }
+            setViewMode('flashcard');
+        }
+
+        function setViewMode(mode) {
+            viewMode = mode;
+            if (mode === 'list') {
+                btnList.className = "flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all bg-white text-indigo-600 shadow-sm";
+                btnFlashcard.className = "flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all text-indigo-400 hover:text-indigo-600";
+            } else {
+                btnFlashcard.className = "flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all bg-white text-indigo-600 shadow-sm";
+                btnList.className = "flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all text-indigo-400 hover:text-indigo-600";
+                if (currentCardIndex >= getFilteredWords().length) {
+                    currentCardIndex = Math.max(0, getFilteredWords().length - 1);
+                }
+            }
+            render();
+        }
+
+        function setFilterMode(mode) {
+            filterMode = mode;
+            if (mode === 'all') {
+                btnFilterAll.className = "flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-bold transition-all bg-indigo-100 text-indigo-700 shadow-sm";
+                btnFilterStarred.className = "flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-bold transition-all text-indigo-400 hover:text-indigo-600";
+            } else {
+                btnFilterStarred.className = "flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-bold transition-all bg-amber-50 text-amber-700 shadow-sm";
+                btnFilterAll.className = "flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-bold transition-all text-indigo-400 hover:text-indigo-600";
+            }
+            currentCardIndex = 0;
+            render();
+        }
+
+        // 필터링 적용
+        function getFilteredWords() {
+            let filtered = words;
+            if (filterMode === 'starred') filtered = filtered.filter(w => w.isStarred);
+            if (gradeFilterMode !== 'all') filtered = filtered.filter(w => w.grade === gradeFilterMode);
+            if (subjectFilterMode !== 'all') filtered = filtered.filter(w => w.subject === subjectFilterMode); // 과목 필터 적용
+            
+            if (searchQuery) {
+                filtered = filtered.filter(w => {
+                    if (searchType === 'word') {
+                        const wordText = w.word ? w.word.toLowerCase() : '';
+                        return wordText.includes(searchQuery);
+                    } else {
+                        const meaningText = w.meaning ? w.meaning.toLowerCase() : '';
+                        return meaningText.includes(searchQuery);
+                    }
+                });
+            }
+            return filtered;
+        }
+
+        // 정렬 기능 로직
+        function handleSortChange(e) {
+            if (userTier !== 'max' && e.target.value !== 'newest') {
+                e.preventDefault();
+                e.target.value = 'newest';
+                openPremiumModal();
+                return;
+            }
+
+            localStorage.setItem('study-sort', e.target.value);
+            applyCurrentSort();
+            currentCardIndex = 0;
+            saveData();
+            render();
+        }
+
+        function applyCurrentSort() {
+            const sortType = sortSelect.value;
+            words.sort((a, b) => {
+                if (sortType === 'word_asc') {
+                    const textA = (a.word || '').toString();
+                    const textB = (b.word || '').toString();
+                    return textA.localeCompare(textB, 'ko-KR');
+                } else if (sortType === 'meaning') {
+                    const textA = (a.meaning || '').toString();
+                    const textB = (b.meaning || '').toString();
+                    return textA.localeCompare(textB, 'ko-KR');
+                } else if (sortType === 'oldest') {
+                    return parseInt(a.id) - parseInt(b.id);
+                } else { // newest
+                    return parseInt(b.id) - parseInt(a.id);
+                }
+            });
+        }
+
+        // 렌더링 컨트롤
+        function render() {
+            const filteredWords = getFilteredWords();
+            if (filteredWords.length === 0) {
+                appContent.innerHTML = getEmptyStateHTML();
+                return;
+            }
+            if (viewMode === 'list') {
+                appContent.innerHTML = getListHTML();
+            } else {
+                appContent.innerHTML = getFlashcardHTML();
+            }
+        }
+
+        // HTML 생성
+        function getEmptyStateHTML() {
+            let msg = "오른쪽 아래 + 버튼을 눌러 첫 단어를 추가해보세요!";
+            if (filterMode === 'starred') msg = "중요 표시한 단어가 없어요.<br>리스트에서 별표를 추가해보세요!";
+            else if (searchQuery) msg = `'${searchQuery}'에 대한 검색 결과가 없어요.`;
+            else if (gradeFilterMode !== 'all') msg = `해당 학년(${gradeFilterMode})의 단어가 없어요.`;
+            else if (subjectFilterMode !== 'all') msg = `해당 과목(${subjectFilterMode})의 단어가 없어요.`;
+                
+            return `
+                <div class="text-center py-20 animate-fade-in">
+                    <div class="w-24 h-24 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <i class="ph-fill ph-book-open text-5xl text-indigo-300"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-slate-700 mb-2">단어장이 비어있어요</h3>
+                    <p class="text-indigo-400 mb-8">${msg}</p>
+                </div>
+            `;
+        }
+
+        function getListHTML() {
+            let html = '<div class="grid gap-4 animate-fade-in">';
+            getFilteredWords().forEach(item => {
+                html += `
+                    <div class="bg-white/80 backdrop-blur-md p-5 rounded-3xl shadow-sm border border-indigo-100 flex flex-col md:flex-row md:items-center justify-between group hover:shadow-md hover:border-indigo-200 transition-all gap-4">
+                        <div class="flex-1">
+                            <div class="flex items-center gap-2 mb-1">
+                                ${item.subject ? `<span class="inline-block px-2 py-0.5 bg-sky-50 text-sky-600 text-[10px] font-bold rounded-md border border-sky-100">${item.subject}</span>` : ''}
+                                ${item.grade ? `<span class="inline-block px-2 py-0.5 bg-indigo-50 text-indigo-600 text-[10px] font-bold rounded-md border border-indigo-100">${item.grade}</span>` : ''}
+                            </div>
+                            <div class="text-xl font-bold text-slate-800 mb-2 md:mb-0">${item.word}</div>
+                        </div>
+                        <div class="flex items-center justify-between md:justify-end gap-4 flex-1">
+                            <span class="text-sm font-medium text-slate-600 line-clamp-2 md:text-right flex-1">${item.meaning}</span>
+                            <div class="flex items-center gap-1 border-l border-indigo-100 pl-3 shrink-0">
+                                <button onclick="toggleStar('${item.id}', event)" class="p-2 ${item.isStarred ? 'bg-amber-50 text-amber-400 hover:bg-amber-100 hover:text-amber-500' : 'text-indigo-200 hover:bg-indigo-50 hover:text-amber-400'} rounded-full transition-all hover:scale-110" title="중요 표시">
+                                    <i class="${item.isStarred ? 'ph-fill' : 'ph-bold'} ph-star text-lg"></i>
+                                </button>
+                                <button onclick="openModal('${item.id}')" class="p-2 text-blue-400 bg-blue-50 hover:bg-blue-100 hover:text-blue-600 rounded-full transition-all hover:scale-110" title="단어 수정하기">
+                                    <i class="ph-bold ph-pencil-simple text-lg"></i>
+                                </button>
+                                <button onclick="confirmDelete('${item.id}')" class="p-2 text-rose-400 bg-rose-50 hover:bg-rose-100 hover:text-rose-600 rounded-full transition-all hover:scale-110" title="단어 삭제하기">
+                                    <i class="ph-bold ph-trash text-lg"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            return html;
+        }
+
+        function getFlashcardHTML() {
+            const filteredWords = getFilteredWords();
+            const card = filteredWords[currentCardIndex];
+            if(!card) return '';
+
+            return `
+                <div class="flex flex-col items-center justify-center w-full max-w-sm mx-auto h-[400px] animate-fade-in relative">
+                    <div class="text-indigo-400 font-medium mb-4 tracking-widest text-sm">
+                        ${currentCardIndex + 1} / ${filteredWords.length}
+                    </div>
+                    
+                    <button onclick="toggleStar('${card.id}', event)" class="absolute top-10 right-0 z-20 p-3 bg-white/80 backdrop-blur-md rounded-full shadow-sm hover:scale-110 transition-all border border-indigo-50" title="중요 표시">
+                        <i class="${card.isStarred ? 'ph-fill text-amber-400' : 'ph-bold text-indigo-200'} ph-star text-2xl"></i>
+                    </button>
+                    
+                    <div class="relative w-full h-72 cursor-pointer group perspective-1000" onclick="toggleCardFlip()">
+                        <div id="flashcard-inner" class="w-full h-full transition-transform duration-500 preserve-3d relative">
+                                <div class="absolute w-full h-full bg-white rounded-3xl shadow-xl shadow-indigo-100/80 border-2 border-indigo-50 flex flex-col items-center justify-center p-6 backface-hidden">
+                                    <i class="ph-fill ph-books absolute top-4 left-4 text-2xl text-indigo-100 opacity-50"></i>
+                                    <i class="ph-fill ph-lightbulb absolute bottom-4 right-4 text-2xl text-amber-100 opacity-50"></i>
+                                    
+                                    <div class="absolute top-6 left-1/2 -translate-x-1/2 flex gap-1 items-center">
+                                        ${card.subject ? `<span class="px-3 py-1 bg-sky-50 text-sky-500 text-xs font-bold rounded-full border border-sky-100">${card.subject}</span>` : ''}
+                                        ${card.grade ? `<span class="px-3 py-1 bg-indigo-50 text-indigo-500 text-xs font-bold rounded-full border border-indigo-100">${card.grade}</span>` : ''}
+                                    </div>
+                                    
+                                    <h2 class="text-4xl font-bold text-slate-800 text-center px-4 word-break-keep-all">${card.word}</h2>
+                                    <p class="mt-8 text-indigo-300 text-sm flex items-center gap-1">
+                                        <i class="ph-bold ph-arrow-u-up-left"></i> 탭하여 뜻 확인
+                                    </p>
+                                </div>
+                                <div class="absolute w-full h-full bg-gradient-to-br from-indigo-50 to-sky-50 rounded-3xl shadow-xl shadow-indigo-100/80 border-2 border-indigo-100 flex flex-col items-center justify-center p-6 backface-hidden rotate-y-180">
+                                   <h2 class="text-2xl font-bold text-indigo-800 text-center leading-relaxed px-2 word-break-keep-all">${card.meaning}</h2>
+                                </div>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-4 mt-10">
+                        <button onclick="prevCard(event)" class="p-4 bg-white text-indigo-400 rounded-full shadow-md hover:bg-indigo-50 hover:text-indigo-500 transition-all border border-indigo-50">
+                            <i class="ph-bold ph-caret-left text-xl"></i>
+                        </button>
+                        <button onclick="openModal('${card.id}')" class="p-4 bg-blue-50 text-blue-500 rounded-full shadow-md hover:bg-blue-100 hover:text-blue-600 hover:scale-110 transition-all border border-blue-100" title="이 단어 수정하기">
+                            <i class="ph-bold ph-pencil-simple text-xl"></i>
+                        </button>
+                        <button onclick="confirmDelete('${card.id}')" class="p-4 bg-rose-50 text-rose-500 rounded-full shadow-md hover:bg-rose-100 hover:text-rose-600 hover:scale-110 transition-all border border-rose-100" title="이 단어 삭제하기">
+                            <i class="ph-bold ph-trash text-xl"></i>
+                        </button>
+                        <button onclick="nextCard(event)" class="p-4 bg-white text-indigo-400 rounded-full shadow-md hover:bg-indigo-50 hover:text-indigo-500 transition-all border border-indigo-50">
+                            <i class="ph-bold ph-caret-right text-xl"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function toggleCardFlip() {
+            const inner = document.getElementById('flashcard-inner');
+            if (inner) inner.classList.toggle('rotate-y-180');
+        }
+
+        function nextCard(e) {
+            e.stopPropagation();
+            const filteredWords = getFilteredWords();
+            const inner = document.getElementById('flashcard-inner');
+            if (inner && inner.classList.contains('rotate-y-180')) {
+                inner.classList.remove('rotate-y-180');
+                setTimeout(() => {
+                    currentCardIndex = (currentCardIndex + 1) % filteredWords.length;
+                    render();
+                }, 200);
+            } else {
+                currentCardIndex = (currentCardIndex + 1) % filteredWords.length;
+                render();
+            }
+        }
+
+        function prevCard(e) {
+            e.stopPropagation();
+            const filteredWords = getFilteredWords();
+            const inner = document.getElementById('flashcard-inner');
+            if (inner && inner.classList.contains('rotate-y-180')) {
+                inner.classList.remove('rotate-y-180');
+                setTimeout(() => {
+                    currentCardIndex = currentCardIndex === 0 ? filteredWords.length - 1 : currentCardIndex - 1;
+                    render();
+                }, 200);
+            } else {
+                currentCardIndex = currentCardIndex === 0 ? filteredWords.length - 1 : currentCardIndex - 1;
+                render();
+            }
+        }
+
+        function toggleStar(id, e) {
+            if (e) e.stopPropagation();
+            if (userTier !== 'max') {
+                openPremiumModal();
+                return;
+            }
+            const index = words.findIndex(w => w.id === id);
+            if (index !== -1) {
+                words[index].isStarred = !words[index].isStarred;
+                saveData();
+                render();
+            }
+        }
+
+        function createParticles() {
+            const container = document.getElementById('particles');
+            if (!container) return;
+            const icons = ['ph-book-open', 'ph-star', 'ph-sparkle'];
+            for (let i = 0; i < 20; i++) {
+                const particle = document.createElement('i');
+                const randomIcon = icons[Math.floor(Math.random() * icons.length)];
+                particle.className = `ph-fill ${randomIcon} particle`;
+                particle.style.left = Math.random() * 100 + 'vw';
+                particle.style.fontSize = (Math.random() * 1 + 0.5) + 'rem';
+                particle.style.animation = `falling ${Math.random() * 15 + 10}s linear ${Math.random() * 10}s infinite`;
+                particle.style.opacity = Math.random() * 0.4 + 0.2;
+                container.appendChild(particle);
+            }
+        }
+
+        function confirmDelete(id) {
+            wordToDeleteId = id;
+            deleteConfirmModal.classList.remove('hidden');
+            deleteConfirmModal.classList.add('flex');
+        }
+
+        function cancelDelete() {
+            wordToDeleteId = null;
+            deleteConfirmModal.classList.add('hidden');
+            deleteConfirmModal.classList.remove('flex');
+        }
+
+        function executeDelete() {
+            if (!wordToDeleteId) return;
+            words = words.filter(w => w.id !== wordToDeleteId);
+            
+            if (viewMode === 'flashcard') {
+                const filteredWords = getFilteredWords();
+                if (currentCardIndex >= filteredWords.length) {
+                    currentCardIndex = Math.max(0, filteredWords.length - 1);
+                }
+            }
+            saveData();
+            render();
+            cancelDelete();
+        }
+
+        function openModal(editId = null) {
+            if (!editId) {
+                if (userTier === 'free' && words.length >= 50) {
+                    openPremiumModal();
+                    return;
+                }
+                if (userTier === 'pro' && words.length >= 300) {
+                    openPremiumModal();
+                    return;
+                }
+                editingId = null;
+                modalTitle.innerHTML = '<i class="ph-fill ph-book-open-text text-indigo-500 text-xl"></i> 새 단어 추가';
+                btnSubmitModal.innerText = '추가하기';
+                addForm.reset();
+            } else {
+                editingId = editId;
+                const wordToEdit = words.find(w => w.id === editId);
+                if(wordToEdit) {
+                    document.getElementById('input-word').value = wordToEdit.word || '';
+                    document.getElementById('input-meaning').value = wordToEdit.meaning || '';
+                    document.getElementById('input-grade').value = wordToEdit.grade || '';
+                    document.getElementById('input-subject').value = wordToEdit.subject || '';
+                }
+                modalTitle.innerHTML = '<i class="ph-bold ph-pencil-simple text-blue-500 text-xl"></i> 단어 수정';
+                btnSubmitModal.innerText = '수정하기';
+            }
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            document.getElementById('input-word').focus();
+        }
+
+        function closeModal() {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            addForm.reset();
+            editingId = null;
+        }
+
+        function openPremiumModal() {
+            premiumModal.classList.remove('hidden');
+            premiumModal.classList.add('flex');
+        }
+
+        function closePremiumModal() {
+            premiumModal.classList.add('hidden');
+            premiumModal.classList.remove('flex');
+        }
+
+        function purchaseTier(tier) {
+            userTier = tier;
+            localStorage.setItem('study-tier', tier);
+            closePremiumModal();
+            updateUIState();
+            if(tier === 'max') render(); 
+        }
+
+        function resetTier() {
+            userTier = 'free';
+            localStorage.setItem('study-tier', 'free');
+            localStorage.setItem('study-premium', 'false');
+            closePremiumModal();
+            updateUIState();
+            
+            // 모드가 잠긴 상태로 돌아갈 수 있으므로 기본값으로 초기화
+            if (viewMode === 'flashcard') setViewMode('list');
+            if (filterMode === 'starred') setFilterMode('all');
+            if (sortSelect && sortSelect.value !== 'newest') {
+                sortSelect.value = 'newest';
+                localStorage.setItem('study-sort', 'newest');
+                applyCurrentSort();
+            }
+            
+            render();
+        }
+
+        addForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const newWord = document.getElementById('input-word').value.trim();
+            const newMeaning = document.getElementById('input-meaning').value.trim();
+            const newGrade = document.getElementById('input-grade').value;
+            const newSubject = document.getElementById('input-subject').value;
+
+            if (!newWord || !newMeaning) return;
+
+            if (editingId) {
+                const index = words.findIndex(w => w.id === editingId);
+                if (index !== -1) {
+                    words[index] = { ...words[index], word: newWord, meaning: newMeaning, grade: newGrade, subject: newSubject };
+                }
+            } else {
+                const newEntry = { id: Date.now().toString(), word: newWord, meaning: newMeaning, grade: newGrade, subject: newSubject, isStarred: false };
+                words.unshift(newEntry);
+            }
+
+            saveData();
+            closeModal();
+            render();
+            if(!editingId && viewMode !== 'list') setViewMode('list');
+        });
+
+        document.addEventListener('keydown', function(e) {
+            // 현재 입력 중인지 확인 (검색창 등에서 'f/ㄹ'을 입력할 때는 모달이 안 뜨도록 예외 처리)
+            const isInputFocused = document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA';
+
+            if (e.key === 'Escape') {
+                if (!modal.classList.contains('hidden')) closeModal();
+                if (premiumModal && !premiumModal.classList.contains('hidden')) closePremiumModal();
+                if (deleteConfirmModal && !deleteConfirmModal.classList.contains('hidden')) cancelDelete();
+            }
+
+            // 'f' 또는 'ㄹ' 키 단축키 (입력 중이 아니고, 다른 모달이 열려있지 않을 때만 동작)
+            if (!isInputFocused && (e.key === 'f' || e.key === 'F' || e.key === 'ㄹ')) {
+                if (modal.classList.contains('hidden') && premiumModal.classList.contains('hidden') && deleteConfirmModal.classList.contains('hidden')) {
+                    e.preventDefault(); // 기본 입력 방지
+                    openModal();
+                }
+            }
+        });
+
+        window.onload = initApp;
+    </script>
+</body>
+</html>
